@@ -12,16 +12,24 @@ let shouldBeDisabled = true;
 
 const encUrl = "https://cdn.glitch.global/c46096bd-2ff8-49e5-984a-c5a008800622/taesd_encoder.onnx?v=1721555115983";
 const decUrl = "https://cdn.glitch.global/c46096bd-2ff8-49e5-984a-c5a008800622/taesd_decoder.onnx?v=1721555116768";
+ort.env.wasm.numThreads = 4;
 async function loadModel(url) {
-    return await ort.InferenceSession.create(url);
+    const model = await ort.InferenceSession.create(url, {executionProviders: ['wasm'], graphOptimizationLevel:'all'});
+    return model
 }
+async function loadModels(){
+  const model1 = await loadModel(encUrl);
+  const model2 = await loadModel(decUrl);
+  return [model1, model2];
+}
+
 
 let gifLoading = Promise.all([fetch('https://cdn.jsdelivr.net/npm/gif.js@0.2.0/dist/gif.worker.js')
   .then((response) => {
     if (!response.ok)
       throw new Error("Network response was not OK");
     return response.blob();
-  }), loadModel("encUrl"), loadModel("decUrl")]).then(([workerBlob, encoderModel, decoderModel]) => {
+  }), loadModels()]).then(([workerBlob, [encoderModel, decoderModel]]) => {
     imageUpload.addEventListener('change', () => {
         if (imageUpload.files.length > 0) {
             shouldBeDisabled = false;
@@ -30,6 +38,8 @@ let gifLoading = Promise.all([fetch('https://cdn.jsdelivr.net/npm/gif.js@0.2.0/d
         }
         generateBtn.disabled = shouldBeDisabled;
     });
+  
+    console.log("init")
 
     function generateGIF() {
 
@@ -50,7 +60,7 @@ let gifLoading = Promise.all([fetch('https://cdn.jsdelivr.net/npm/gif.js@0.2.0/d
         const reader = new FileReader();
         reader.onload = function(e) {
           const img = new Image();
-          img.onload = function() {
+          img.onload = async function() {
 
               const canvas = document.createElement('canvas');
               canvas.width = img.width;
@@ -66,6 +76,8 @@ let gifLoading = Promise.all([fetch('https://cdn.jsdelivr.net/npm/gif.js@0.2.0/d
               for (let i = 0; i < pixels.length; i++) {
                   normalizedPixels[i] = pixels[i] / 127.5 - 1;
               }
+            
+              const latentRepresentation = await encode(encoderModel, pixels);
 
               const frameCount = parseInt(gifLength.value);
               const etaValue = parseFloat(eta.value);
