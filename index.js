@@ -100,7 +100,7 @@ let gifLoading = Promise.all([fetch('https://cdn.jsdelivr.net/npm/gif.js@0.2.0/d
                       const segmentSize = Math.floor(buffer.length / 3);
                       const rgbaPixels = new Uint8ClampedArray(segmentSize * 4).fill(255);
                       for (let i = 0; i < buffer.length; i++) {
-                          rgbaPixels[(i % 3) * segmentSize + Math.floor(i / 3)] = Math.round((buffer[i] + 1) * 127.5);
+                          rgbaPixels[(i % segmentSize) * 4 + Math.floor(i / segmentSize)] = Math.round((buffer[i] + 1) * 127.5);
                       }
                       // const frameData = new ImageData(rgbPixels, roundH * expansionFactor, roundW * expansionFactor);
                       const displayPixels = new Uint8ClampedArray(pixels.length);
