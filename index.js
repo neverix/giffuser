@@ -102,7 +102,7 @@ let gifLoading = Promise.all([fetch('https://cdn.jsdelivr.net/npm/gif.js@0.2.0/d
                       const segmentSize = Math.floor(buffer.length / 3);
                       const rgbaPixels = new Uint8ClampedArray(segmentSize * 4).fill(255);
                       for (let i = 0; i < buffer.length; i++) {
-                          rgbaPixels[(i % segmentSize) * 4 + Math.floor(i / segmentSize)] = Math.round((buffer[i]) * 255);
+                          rgbaPixels[(i % segmentSize) * 4 + Math.floor(i / segmentSize)] = Math.round((buffer[i] + 1) * 127.5);
                       }
                       // const frameData = new ImageData(rgbPixels, roundH * expansionFactor, roundW * expansionFactor);
                       const displayPixels = new Uint8ClampedArray(pixels.length);
@@ -125,7 +125,7 @@ let gifLoading = Promise.all([fetch('https://cdn.jsdelivr.net/npm/gif.js@0.2.0/d
               const normalizedPixels = new Float32Array(segmentSize * 3);
               for (let i = 0; i < pixels.length; i++) {
                   if(i % 4 == 3) continue;
-                  normalizedPixels[(i % 4) * segmentSize + Math.floor(i / 4)] = pixels[i] / 255;
+                  normalizedPixels[(i % 4) * segmentSize + Math.floor(i / 4)] = pixels[i] / 255.;
               }
   
               const tensor = new ort.Tensor('float32', normalizedPixels, [1, 3, canvas.height, canvas.width]); // Adjust shape as needed
@@ -134,11 +134,6 @@ let gifLoading = Promise.all([fetch('https://cdn.jsdelivr.net/npm/gif.js@0.2.0/d
               encoderModel.run(feeds).then(results => {
                   setProgress(100);
                   const latentRepresentation = results.latent_sample.data.map(x => (x / (2 * latentMagnitude)) + latentShift);
-                const ogarr = Array.from(new Array(2), (x => {
-                              const narr = new Float32Array(latentRepresentation.length);
-                              narr.set(latentRepresentation);
-                              return narr;
-                            }))
 
                   const frameCount = parseInt(gifLength.value);
                   const etaValue = parseFloat(eta.value);
@@ -157,8 +152,7 @@ let gifLoading = Promise.all([fetch('https://cdn.jsdelivr.net/npm/gif.js@0.2.0/d
 
                           setMessage("Decoding...");
                           decodeImages(
-                            // frames
-                            ogarr
+                            frames
                                       ).then(frames => {
                             const gif = new GIF({
                                 workers: 2,
