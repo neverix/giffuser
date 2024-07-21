@@ -93,15 +93,15 @@ let gifLoading = Promise.all([fetch('https://cdn.jsdelivr.net/npm/gif.js@0.2.0/d
                       const frame = frames[i];
                       const roundH = Math.ceil(canvas.height / expansionFactor);
                       const roundW = Math.ceil(canvas.width / expansionFactor);
-                    console.log(frame);
                       const tensor = new ort.Tensor('float32', frame.map(x => x / scalingFactor), [1, 4, roundH, roundW]); // Adjust shape as needed
                       const feeds = { latent_sample: tensor };
                       const results = await decoderModel.run(feeds);
                       const buffer = results.sample.data;
                       const rgbPixels = new Uint8ClampedArray(Math.floor(buffer.length / 3) * 4);
-                      for (let i = 0; i < frame.length; i++) {
+                      for (let i = 0; i < buffer.length; i++) {
                           rgbPixels[Math.floor(i / 3) * 4 + i % 3] = Math.round((buffer[i] + 1) * 127.5);
                       }
+                      // const frameData = new ImageData(rgbPixels, roundH * expansionFactor, roundW * expansionFactor);
                       const displayPixels = new Uint8ClampedArray(pixels.length);
                       for (let h = 0; h < canvas.height; h++) {
                         for(let w = 0; w < canvas.width; w++) {
@@ -128,6 +128,11 @@ let gifLoading = Promise.all([fetch('https://cdn.jsdelivr.net/npm/gif.js@0.2.0/d
               encoderModel.run(feeds).then(results => {
                   setProgress(100);
                   const latentRepresentation = results.latent_sample.data.map(x => x * scalingFactor);
+                const ogarr = Array.from(new Array(2), (x => {
+                              const narr = new Float32Array(latentRepresentation.length);
+                              narr.set(latentRepresentation);
+                              return narr;
+                            }))
 
                   const frameCount = parseInt(gifLength.value);
                   const etaValue = parseFloat(eta.value);
@@ -147,12 +152,7 @@ let gifLoading = Promise.all([fetch('https://cdn.jsdelivr.net/npm/gif.js@0.2.0/d
                           setMessage("Decoding...");
                           decodeImages(
                             // frames
-                            Array(2).map(() => {
-                              const narr = new Float32Array(latentRepresentation.length);
-                              narr.set(latentRepresentation);
-                              console.log(narr);
-                              return narr;
-                            })
+                            ogarr
                                       ).then(frames => {
                             const gif = new GIF({
                                 workers: 2,
