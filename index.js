@@ -23,6 +23,8 @@ function setProgress(progress) {
 
 const expansionFactor = 8;
 const scalingFactor = 0.18125;
+const latentShift = 0.5;
+const latentMagnitude = 3;
 const encUrl = "https://cdn.glitch.global/c46096bd-2ff8-49e5-984a-c5a008800622/taesd_encoder.onnx?v=1721555115983";
 const decUrl = "https://cdn.glitch.global/c46096bd-2ff8-49e5-984a-c5a008800622/taesd_decoder.onnx?v=1721555116768";
 ort.env.wasm.numThreads = 4;
@@ -93,14 +95,14 @@ let gifLoading = Promise.all([fetch('https://cdn.jsdelivr.net/npm/gif.js@0.2.0/d
                       const frame = frames[i];
                       const roundH = Math.ceil(canvas.height / expansionFactor);
                       const roundW = Math.ceil(canvas.width / expansionFactor);
-                      const tensor = new ort.Tensor('float32', frame.map(x => x / scalingFactor), [1, 4, roundH, roundW]); // Adjust shape as needed
+                      const tensor = new ort.Tensor('float32', frame.map(x => (x - latentShift) * (2 * latentMagnitude)), [1, 4, roundH, roundW]);
                       const feeds = { latent_sample: tensor };
                       const results = await decoderModel.run(feeds);
                       const buffer = results.sample.data;
                       const segmentSize = Math.floor(buffer.length / 3);
                       const rgbaPixels = new Uint8ClampedArray(segmentSize * 4).fill(255);
                       for (let i = 0; i < buffer.length; i++) {
-                          rgbaPixels[(i % segmentSize) * 4 + Math.floor(i / segmentSize)] = Math.round((buffer[i] + 1) * 127.5);
+                          rgbaPixels[(i % segmentSize) * 4 + Math.floor(i / segmentSize)] = Math.round((buffer[i]) * 255);
                       }
                       // const frameData = new ImageData(rgbPixels, roundH * expansionFactor, roundW * expansionFactor);
                       const displayPixels = new Uint8ClampedArray(pixels.length);
@@ -123,7 +125,7 @@ let gifLoading = Promise.all([fetch('https://cdn.jsdelivr.net/npm/gif.js@0.2.0/d
               const normalizedPixels = new Float32Array(segmentSize * 3);
               for (let i = 0; i < pixels.length; i++) {
                   if(i % 4 == 3) continue;
-                  normalizedPixels[(i % 4) * segmentSize + Math.floor(i / 4)] = (pixels[i] / 255 - latentShift) * (2 * latentMagnitude);
+                  normalizedPixels[(i % 4) * segmentSize + Math.floor(i / 4)] = pixels[i] / 255;
               }
   
               const tensor = new ort.Tensor('float32', normalizedPixels, [1, 3, canvas.height, canvas.width]); // Adjust shape as needed
@@ -131,7 +133,7 @@ let gifLoading = Promise.all([fetch('https://cdn.jsdelivr.net/npm/gif.js@0.2.0/d
               setMessage("Encoding with VAE...");
               encoderModel.run(feeds).then(results => {
                   setProgress(100);
-                  const latentRepresentation = results.latent_sample.data.map(x => x * scalingFactor);
+                  const latentRepresentation = results.latent_sample.data.map(x => (x / (2 * latentMagnitude)) + latentShift);
                 const ogarr = Array.from(new Array(2), (x => {
                               const narr = new Float32Array(latentRepresentation.length);
                               narr.set(latentRepresentation);
