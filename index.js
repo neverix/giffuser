@@ -92,6 +92,7 @@ let gifLoading = Promise.all([fetch('https://cdn.jsdelivr.net/npm/gif.js@0.2.0/d
                       const frame = frames[i];
                       const roundH = Math.ceil(canvas.height / expansionFactor);
                       const roundW = Math.ceil(canvas.width / expansionFactor);
+                    console.log(i, frame);
                       const tensor = new ort.Tensor('float32', frame, [1, 4, roundH, roundW]); // Adjust shape as needed
                       const feeds = { latent_sample: tensor };
                       const results = await decoderModel.run(feeds);
@@ -103,12 +104,14 @@ let gifLoading = Promise.all([fetch('https://cdn.jsdelivr.net/npm/gif.js@0.2.0/d
                       const displayPixels = new Uint8ClampedArray(pixels.length);
                       for (let h = 0; h < canvas.height; h++) {
                         for(let w = 0; w < canvas.width; w++) {
-                          displayPixels[Math.floor(i / 3) * 4 + i % 3] = Math.round((frame[i] + 1) * 127.5);
+                          displayPixels[h * canvas.width + w] = displayPixels[h * (roundW * expansionFactor) + w];
                         }
                       }
-                      const frameData = new ImageData(displayPixels, roundH * expansionFactor, roundW * expansionFactor);
-                      setProgress((i + 1) / frames.length);
+                      const frameData = new ImageData(displayPixels, canvas.height, canvas.width);
+                      decoded.push(frameData);
+                      setProgress((i + 1) / (frames.length + 1));
                   }
+                  setProgress(1);
                   return decoded;
               }
 
@@ -142,6 +145,7 @@ let gifLoading = Promise.all([fetch('https://cdn.jsdelivr.net/npm/gif.js@0.2.0/d
 
                           setMessage("Decoding...");
                           decodeImages(frames).then(frames => {
+                            console.log(frames);
 
                             const gif = new GIF({
                                 workers: 2,

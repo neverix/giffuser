@@ -37,15 +37,18 @@ function generateFrames(normalizedPixels, frameCount, etaValue) {
             );
         }
       
-        frames.push(currentSample);
+        // frames.push(currentSample);
+        frames.push(normalizedPixels.map(x => x));
         prevSample = currentSample;
 
         // Report progress
         self.postMessage({ type: 'progress', progress: (frameCount - t) / (frameCount - 1)  });
     }
   
-    for (let i = 0; i < 10; i++) {
-        frames.push(currentSample);
+    for (let i = 0; i < 1; i++) {
+        let newSample = new Float32Array(currentSample.length);
+        newSample.set(currentSample);
+        frames.push(newSample);
     }
 
     return frames;
