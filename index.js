@@ -5,6 +5,9 @@ const generateBtn = document.getElementById('generateBtn');
 const result = document.getElementById('result');
 const progressBarContainer = document.getElementById('progressBarContainer');
 const progressBar = document.getElementById('progressBar');
+const overlay = document.getElementById('overlay');
+const downloadBtn = document.getElementById('downloadBtn');
+let shouldBeDisabled = true;
 
 let gifLoading = fetch('https://cdn.jsdelivr.net/npm/gif.js@0.2.0/dist/gif.worker.js')
   .then((response) => {
@@ -12,22 +15,36 @@ let gifLoading = fetch('https://cdn.jsdelivr.net/npm/gif.js@0.2.0/dist/gif.worke
       throw new Error("Network response was not OK");
     return response.blob();
   }).then((workerBlob) => {
+    imageUpload.addEventListener('change', () => {
+        if (imageUpload.files.length > 0) {
+            shouldBeDisabled = false;
+        } else {
+            shouldBeDisabled = true;
+        }
+        generateBtn.disabled = shouldBeDisabled;
+    });
+
     function generateGIF() {
+
+        generateBtn.disabled = true;
+
         const file = imageUpload.files[0];
         if (!file) {
             alert('Please upload an image first.');
             return;
         }
 
-        // Show progress bar
+        // Show progress bar and overlay
         progressBarContainer.style.display = 'block';
         progressBar.style.width = '0%';
         progressBar.textContent = '0%';
+        overlay.style.display = 'flex';
 
         const reader = new FileReader();
         reader.onload = function(e) {
           const img = new Image();
           img.onload = function() {
+
               const canvas = document.createElement('canvas');
               canvas.width = img.width;
               canvas.height = img.height;
@@ -83,8 +100,14 @@ let gifLoading = fetch('https://cdn.jsdelivr.net/npm/gif.js@0.2.0/dist/gif.worke
                       gif.on('finished', function(blob) {
                           const gifUrl = URL.createObjectURL(blob);
                           result.innerHTML = `<img src="${gifUrl}" alt="Generated GIF">`;
-                          // Hide progress bar
+                          downloadBtn.href = gifUrl;
+                          downloadBtn.style.display = "inline";
+                          const fileNameWithoutExtension = file.name.substring(0, file.name.lastIndexOf('.'));
+                          downloadBtn.setAttribute('download', `diffused-${fileNameWithoutExtension}-${frameCount}-steps-eta${etaValue}.gif`);
+                          // Hide progress bar and overlay
                           progressBarContainer.style.display = 'none';
+                          overlay.style.display = 'none';
+                          generateBtn.disabled = shouldBeDisabled;
                       });
 
                       gif.render();
