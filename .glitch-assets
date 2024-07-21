@@ -15,3 +15,5 @@
 {"uuid":"yEDZsSX7I7P2NlF1","deleted":true}
 {"uuid":"VY2dLeOvcf8ffuEw","deleted":true}
 {"uuid":"XPQ2UUJettC9yQ6L","deleted":true}
+{"name":"taesd_encoder.onnx","date":"2024-07-21T09:45:15.983Z","url":"https://cdn.glitch.global/c46096bd-2ff8-49e5-984a-c5a008800622/taesd_encoder.onnx","type":"","size":4910073,"thumbnail":"https://cdn.glitch.global/c46096bd-2ff8-49e5-984a-c5a008800622/thumbnails%2Ftaesd_encoder.onnx","thumbnailWidth":210,"thumbnailHeight":210,"uuid":"fSoWPpOX8Wuw2jBc"}
+{"name":"taesd_decoder.onnx","date":"2024-07-21T09:45:16.768Z","url":"https://cdn.glitch.global/c46096bd-2ff8-49e5-984a-c5a008800622/taesd_decoder.onnx","type":"","size":4912246,"thumbnail":"https://cdn.glitch.global/c46096bd-2ff8-49e5-984a-c5a008800622/thumbnails%2Ftaesd_decoder.onnx","thumbnailWidth":210,"thumbnailHeight":210,"uuid":"A5Uwj53aIiWTUFH0"}

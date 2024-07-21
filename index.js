@@ -1,3 +1,4 @@
+// index.js
 const imageUpload = document.getElementById('imageUpload');
 const gifLength = document.getElementById('gifLength');
 const eta = document.getElementById('eta');
@@ -9,12 +10,18 @@ const overlay = document.getElementById('overlay');
 const downloadBtn = document.getElementById('downloadBtn');
 let shouldBeDisabled = true;
 
-let gifLoading = fetch('https://cdn.jsdelivr.net/npm/gif.js@0.2.0/dist/gif.worker.js')
+const encUrl = "https://cdn.glitch.global/c46096bd-2ff8-49e5-984a-c5a008800622/taesd_encoder.onnx?v=1721555115983";
+const decUrl = "https://cdn.glitch.global/c46096bd-2ff8-49e5-984a-c5a008800622/taesd_decoder.onnx?v=1721555116768";
+async function loadModel(url) {
+    return await ort.InferenceSession.create(url);
+}
+
+let gifLoading = Promise.all([fetch('https://cdn.jsdelivr.net/npm/gif.js@0.2.0/dist/gif.worker.js')
   .then((response) => {
     if (!response.ok)
       throw new Error("Network response was not OK");
     return response.blob();
-  }).then((workerBlob) => {
+  }), loadModel("encUrl"), loadModel("decUrl")]).then(([workerBlob, encoderModel, decoderModel]) => {
     imageUpload.addEventListener('change', () => {
         if (imageUpload.files.length > 0) {
             shouldBeDisabled = false;
