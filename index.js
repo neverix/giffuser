@@ -99,7 +99,7 @@ let gifLoading = Promise.all([fetch('https://cdn.jsdelivr.net/npm/gif.js@0.2.0/d
                       const frame = frames[i];
                       const roundH = Math.ceil(canvas.height / expansionFactor);
                       const roundW = Math.ceil(canvas.width / expansionFactor);
-                      const tensor = new ort.Tensor('float32', frame.map(x => (x - latentShift) * (2 * latentMagnitude)), [1, 4, roundH, roundW]);
+                      const tensor = new ort.Tensor('float32', frame.map(x => ((x + 1) / 2 - latentShift) * (2 * latentMagnitude)), [1, 4, roundH, roundW]);
                       const feeds = { latent_sample: tensor };
                       const results = await decoderModel.run(feeds);
                       const buffer = results.sample.data;
@@ -137,7 +137,7 @@ let gifLoading = Promise.all([fetch('https://cdn.jsdelivr.net/npm/gif.js@0.2.0/d
               setMessage("Encoding with VAE...");
               encoderModel.run(feeds).then(results => {
                   setProgress(1);
-                  const latentRepresentation = results.latent_sample.data.map(x => (x / (2 * latentMagnitude)) + latentShift);
+                  const latentRepresentation = results.latent_sample.data.map(x => ((x / (2 * latentMagnitude)) + latentShift) * 2 - 1);
 
                   setMessage("Running diffusion...");
                   setProgress(0);

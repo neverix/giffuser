@@ -6,7 +6,7 @@ self.onmessage = function(e) {
 };
 
 function alfun(t) {
-  return Math.sqrt(t);
+  return t;
 }
 
 function generateFrames(normalizedPixels, frameCount, etaValue) {
