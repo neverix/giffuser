@@ -10,8 +10,33 @@ const progressBar = document.getElementById('progressBar');
 const progressMessage = document.getElementById('progressMessage');
 const overlay = document.getElementById('overlay');
 const downloadBtn = document.getElementById('downloadBtn');
+const imageContainer = document.getElementById('imageContainer');
 let shouldBeDisabled = true;
 let loaded = false;
+let worker = null;
+
+// Add cancel button
+const cancelBtn = document.createElement('button');
+cancelBtn.id = 'cancelBtn';
+cancelBtn.className = 'btn btn-danger ms-2';
+cancelBtn.textContent = 'Cancel';
+cancelBtn.style.display = 'none';
+generateBtn.parentNode.insertBefore(cancelBtn, generateBtn.nextSibling);
+
+// Add checkbox for using VAE
+const useVAECheckbox = document.createElement('input');
+useVAECheckbox.type = 'checkbox';
+useVAECheckbox.id = 'useVAE';
+useVAECheckbox.checked = true;
+const useVAELabel = document.createElement('label');
+useVAELabel.htmlFor = 'useVAE';
+useVAELabel.textContent = 'Use VAE (slower but higher quality)';
+useVAELabel.className = 'form-check-label ms-2';
+const useVAEContainer = document.createElement('div');
+useVAEContainer.className = 'form-check mb-3';
+useVAEContainer.appendChild(useVAECheckbox);
+useVAEContainer.appendChild(useVAELabel);
+generateBtn.parentNode.insertBefore(useVAEContainer, generateBtn);
 
 function setMessage(text) {
   progressMessage.textContent = text;
@@ -48,7 +73,6 @@ imageUpload.addEventListener('change', () => {
     generateBtn.disabled = shouldBeDisabled & loaded;
 });
 
-
 let gifLoading = Promise.all([fetch('https://cdn.jsdelivr.net/npm/gif.js@0.2.0/dist/gif.worker.js')
   .then((response) => {
     if (!response.ok)
@@ -60,8 +84,8 @@ let gifLoading = Promise.all([fetch('https://cdn.jsdelivr.net/npm/gif.js@0.2.0/d
     console.log("init")
 
     function generateGIF() {
-
         generateBtn.disabled = true;
+        cancelBtn.style.display = 'inline-block';
 
         const file = imageUpload.files[0];
         if (!file) {
@@ -77,12 +101,13 @@ let gifLoading = Promise.all([fetch('https://cdn.jsdelivr.net/npm/gif.js@0.2.0/d
         const framesPerSecond = parseInt(fps.value);
         const frameCount = parseInt(gifLength.value);
         const etaValue = parseFloat(eta.value);
+        const useVAE = useVAECheckbox.checked;
+      console.log(useVAE);
 
         const reader = new FileReader();
         reader.onload = function(e) {
           const img = new Image();
           img.onload = function() {
-
               const canvas = document.createElement('canvas');
               canvas.width = img.width;
               canvas.height = img.height;
@@ -95,31 +120,51 @@ let gifLoading = Promise.all([fetch('https://cdn.jsdelivr.net/npm/gif.js@0.2.0/d
               async function decodeImages(frames) {
                   decoded = []
                   setProgress(0);
+                console.log(useVAE);
                   for(let i = 0; i < frames.length; i++) {
                       const frame = frames[i];
-                      const roundH = Math.ceil(canvas.height / expansionFactor);
-                      const roundW = Math.ceil(canvas.width / expansionFactor);
-                      const tensor = new ort.Tensor('float32', frame.map(x => ((x + 1) / 2 - latentShift) * (2 * latentMagnitude)), [1, 4, roundH, roundW]);
-                      const feeds = { latent_sample: tensor };
-                      const results = await decoderModel.run(feeds);
-                      const buffer = results.sample.data;
-                      const segmentSize = Math.floor(buffer.length / 3);
-                      const rgbaPixels = new Uint8ClampedArray(segmentSize * 4).fill(255);
-                      for (let i = 0; i < buffer.length; i++) {
-                          rgbaPixels[(i % segmentSize) * 4 + Math.floor(i / segmentSize)] = Math.round((buffer[i] + 1) * 127.5);
-                      }
-                      // const frameData = new ImageData(rgbPixels, roundH * expansionFactor, roundW * expansionFactor);
-                      const displayPixels = new Uint8ClampedArray(pixels.length);
-                      for (let h = 0; h < canvas.height; h++) {
-                        for(let w = 0; w < canvas.width; w++) {
-                          for(let c = 0; c < 4; c++) {
-                            displayPixels[(h * canvas.width + w) * 4 + c] = rgbaPixels[(h * (roundW * expansionFactor) + w) * 4 + c];
+                      let frameData;
+                      if (useVAE) {
+                          const roundH = Math.ceil(canvas.height / expansionFactor);
+                          const roundW = Math.ceil(canvas.width / expansionFactor);
+                          const tensor = new ort.Tensor('float32', frame.map(x => ((x + 1) / 2 - latentShift) * (2 * latentMagnitude)), [1, 4, roundH, roundW]);
+                          const feeds = { latent_sample: tensor };
+                          const results = await decoderModel.run(feeds);
+                          const buffer = results.sample.data;
+                          const segmentSize = Math.floor(buffer.length / 3);
+                          const rgbaPixels = new Uint8ClampedArray(segmentSize * 4).fill(255);
+                          for (let i = 0; i < buffer.length; i++) {
+                              rgbaPixels[(i % segmentSize) * 4 + Math.floor(i / segmentSize)] = Math.round((buffer[i] + 1) * 127.5);
                           }
-                        }
+                          const displayPixels = new Uint8ClampedArray(pixels.length);
+                          for (let h = 0; h < canvas.height; h++) {
+                            for(let w = 0; w < canvas.width; w++) {
+                              for(let c = 0; c < 4; c++) {
+                                displayPixels[(h * canvas.width + w) * 4 + c] = rgbaPixels[(h * (roundW * expansionFactor) + w) * 4 + c];
+                              }
+                            }
+                          }
+                          frameData = new ImageData(displayPixels, canvas.width, canvas.height);
+                      } else {
+                          const rgbaPixels = new Uint8ClampedArray(frame.length * 4);
+                          for (let i = 0; i < frame.length; i++) {
+                              rgbaPixels[i * 4] = Math.round((frame[i] + 1) * 127.5);
+                              rgbaPixels[i * 4 + 1] = Math.round((frame[i + frame.length] + 1) * 127.5);
+                              rgbaPixels[i * 4 + 2] = Math.round((frame[i + 2 * frame.length] + 1) * 127.5);
+                              rgbaPixels[i * 4 + 3] = 255;
+                          }
+                          frameData = new ImageData(rgbaPixels, canvas.width, canvas.height);
                       }
-                      const frameData = new ImageData(displayPixels, canvas.width, canvas.height);
                       decoded.push(frameData);
                       setProgress((i + 1) / frames.length);
+
+                      // Show intermediate decoded pictures
+                      const intermediateCanvas = document.createElement('canvas');
+                      intermediateCanvas.width = canvas.width;
+                      intermediateCanvas.height = canvas.height;
+                      intermediateCanvas.getContext('2d').putImageData(frameData, 0, 0);
+                      imageContainer.innerHTML = '';
+                      imageContainer.appendChild(intermediateCanvas);
                   }
                   return decoded;
               }
@@ -129,21 +174,28 @@ let gifLoading = Promise.all([fetch('https://cdn.jsdelivr.net/npm/gif.js@0.2.0/d
               const normalizedPixels = new Float32Array(segmentSize * 3);
               for (let i = 0; i < pixels.length; i++) {
                   if(i % 4 == 3) continue;
-                  normalizedPixels[(i % 4) * segmentSize + Math.floor(i / 4)] = pixels[i] / 255.;
+                  normalizedPixels[(i % 4) * segmentSize + Math.floor(i / 4)] = pixels[i] / 255. * 2 - 1;
               }
   
-              const tensor = new ort.Tensor('float32', normalizedPixels, [1, 3, canvas.height, canvas.width]); // Adjust shape as needed
-              const feeds = { sample: tensor };
-              setMessage("Encoding with VAE...");
-              encoderModel.run(feeds).then(results => {
-                  setProgress(1);
-                  const latentRepresentation = results.latent_sample.data.map(x => ((x / (2 * latentMagnitude)) + latentShift) * 2 - 1);
+              if (useVAE) {
+                  const tensor = new ort.Tensor('float32', normalizedPixels, [1, 3, canvas.height, canvas.width]);
+                  const feeds = { sample: tensor };
+                  setMessage("Encoding with VAE...");
+                  encoderModel.run(feeds).then(results => {
+                      setProgress(1);
+                      const latentRepresentation = results.latent_sample.data.map(x => ((x / (2 * latentMagnitude)) + latentShift) * 2 - 1);
+                      runDiffusion(latentRepresentation);
+                  });
+              } else {
+                  runDiffusion(normalizedPixels);
+              }
 
+              function runDiffusion(inputPixels) {
                   setMessage("Running diffusion...");
                   setProgress(0);
 
                   // Create a new Web Worker
-                  const worker = new Worker('worker.js');
+                  worker = new Worker('worker.js');
 
                   worker.onmessage = function(e) {
                       if (e.data.type === 'progress') {
@@ -151,10 +203,8 @@ let gifLoading = Promise.all([fetch('https://cdn.jsdelivr.net/npm/gif.js@0.2.0/d
                       } else if (e.data.type === 'result') {
                           const frames = e.data.frames;
 
-                          setMessage("Decoding with VAE...");
-                          decodeImages(
-                            frames
-                                      ).then(frames => {
+                          setMessage("Decoding...");
+                          decodeImages(frames).then(frames => {
                             const gif = new GIF({
                                 workers: 2,
                                 quality: 10,
@@ -164,7 +214,6 @@ let gifLoading = Promise.all([fetch('https://cdn.jsdelivr.net/npm/gif.js@0.2.0/d
                             });
 
                             frames.forEach(frameData => {
-                                // Convert back to [0, 255] range for display
                                 const frameCanvas = document.createElement('canvas');
                                 frameCanvas.width = canvas.width;
                                 frameCanvas.height = canvas.height;
@@ -184,20 +233,21 @@ let gifLoading = Promise.all([fetch('https://cdn.jsdelivr.net/npm/gif.js@0.2.0/d
                                 progressBarContainer.style.display = 'none';
                                 overlay.style.display = 'none';
                                 generateBtn.disabled = shouldBeDisabled;
+                                cancelBtn.style.display = 'none';
                             });
 
                             gif.render();
-                            
-                          })
+                          });
                       }
                   };
                   // Send data to the worker
                   worker.postMessage({
-                      normalizedPixels: latentRepresentation,
+                      normalizedPixels: inputPixels,
                       frameCount,
-                      etaValue
+                      etaValue,
+                      useVAE
                   });
-              })
+              }
           };
           img.src = e.target.result;
       };
@@ -205,4 +255,19 @@ let gifLoading = Promise.all([fetch('https://cdn.jsdelivr.net/npm/gif.js@0.2.0/d
   }
 
   generateBtn.addEventListener('click', generateGIF);
+
+  // Cancel button functionality
+  cancelBtn.addEventListener('click', () => {
+      if (worker) {
+          worker.terminate();
+          worker = null;
+      }
+      generateBtn.disabled = shouldBeDisabled;
+      cancelBtn.style.display = 'none';
+      progressBarContainer.style.display = 'none';
+      overlay.style.display = 'none';
+      result.innerHTML = '';
+      downloadBtn.style.display = 'none';
+      imageContainer.innerHTML = '';
+  });
 });
