@@ -1,6 +1,7 @@
 // index.js
 const imageUpload = document.getElementById('imageUpload');
 const gifLength = document.getElementById('gifLength');
+const fps = document.getElementById('fps');
 const eta = document.getElementById('eta');
 const generateBtn = document.getElementById('generateBtn');
 const result = document.getElementById('result');
@@ -57,7 +58,6 @@ let gifLoading = Promise.all([fetch('https://cdn.jsdelivr.net/npm/gif.js@0.2.0/d
     loaded = true;
     generateBtn.disabled = shouldBeDisabled;
     console.log("init")
-    
 
     function generateGIF() {
 
@@ -73,6 +73,10 @@ let gifLoading = Promise.all([fetch('https://cdn.jsdelivr.net/npm/gif.js@0.2.0/d
         progressBarContainer.style.display = 'block';
         setProgress(0);
         overlay.style.display = 'flex';
+
+        const framesPerSecond = parseInt(fps.value);
+        const frameCount = parseInt(gifLength.value);
+        const etaValue = parseFloat(eta.value);
 
         const reader = new FileReader();
         reader.onload = function(e) {
@@ -132,11 +136,8 @@ let gifLoading = Promise.all([fetch('https://cdn.jsdelivr.net/npm/gif.js@0.2.0/d
               const feeds = { sample: tensor };
               setMessage("Encoding with VAE...");
               encoderModel.run(feeds).then(results => {
-                  setProgress(100);
+                  setProgress(1);
                   const latentRepresentation = results.latent_sample.data.map(x => (x / (2 * latentMagnitude)) + latentShift);
-
-                  const frameCount = parseInt(gifLength.value);
-                  const etaValue = parseFloat(eta.value);
 
                   setMessage("Running diffusion...");
                   setProgress(0);
@@ -150,7 +151,7 @@ let gifLoading = Promise.all([fetch('https://cdn.jsdelivr.net/npm/gif.js@0.2.0/d
                       } else if (e.data.type === 'result') {
                           const frames = e.data.frames;
 
-                          setMessage("Decoding...");
+                          setMessage("Decoding with VAE...");
                           decodeImages(
                             frames
                                       ).then(frames => {
@@ -169,7 +170,7 @@ let gifLoading = Promise.all([fetch('https://cdn.jsdelivr.net/npm/gif.js@0.2.0/d
                                 frameCanvas.height = canvas.height;
                                 frameCanvas.getContext('2d').putImageData(frameData, 0, 0);
 
-                                gif.addFrame(frameCanvas, {delay: 100});
+                                gif.addFrame(frameCanvas, {delay: 1000 / framesPerSecond});
                             });
 
                             gif.on('finished', function(blob) {

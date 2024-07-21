@@ -1,9 +1,13 @@
 // worker.js
 self.onmessage = function(e) {
     const { normalizedPixels, frameCount, etaValue } = e.data;
-    const frames = generateFrames(normalizedPixels, frameCount, etaValue);
+    const frames = generateFrames(normalizedPixels, frameCount + 1, etaValue);
     self.postMessage({ type: 'result', frames: frames });
 };
+
+function alfun(t) {
+  return Math.sqrt(t);
+}
 
 function generateFrames(normalizedPixels, frameCount, etaValue) {
     const frames = [];
@@ -11,8 +15,8 @@ function generateFrames(normalizedPixels, frameCount, etaValue) {
     let currentSample = prevSample;
 
     for (let t = frameCount - 1; t > 0; t--) {
-        const alphaProdT = 1 - t / (frameCount - 1);
-        const alphaProdTPrev = 1 - (t - 1) / (frameCount - 1);
+        const alphaProdT = alfun(1 - t / (frameCount - 1));
+        const alphaProdTPrev = alfun(1 - (t - 1) / (frameCount - 1));
         const betaProdT = 1 - alphaProdT;
         const variance = getVariance(t, t - 1, frameCount);
         const stdDevT = etaValue * Math.sqrt(variance);
@@ -43,12 +47,6 @@ function generateFrames(normalizedPixels, frameCount, etaValue) {
         // Report progress
         self.postMessage({ type: 'progress', progress: (frameCount - t) / (frameCount - 1)  });
     }
-  
-    for (let i = 0; i < 1; i++) {
-        let newSample = new Float32Array(normalizedPixels.length);
-        newSample.set(normalizedPixels);
-        frames.push(newSample);
-    }
 
     return frames;
 }
@@ -58,8 +56,8 @@ function generateNoise(size) {
 }
 
 function getVariance(timestep, prevTimestep, totalSteps) {
-    const alphaProdT = 1 - (timestep / (totalSteps - 1));
-    const alphaProdTPrev = 1 - (prevTimestep / (totalSteps - 1));
+    const alphaProdT = alfun(1 - (timestep / (totalSteps - 1)));
+    const alphaProdTPrev = alfun(1 - (prevTimestep / (totalSteps - 1)));
     
     const betaProdT = 1 - alphaProdT;
     const betaProdTPrev = 1 - alphaProdTPrev;
