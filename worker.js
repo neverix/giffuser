@@ -37,8 +37,7 @@ function generateFrames(normalizedPixels, frameCount, etaValue) {
             );
         }
       
-        // frames.push(currentSample);
-        frames.push(normalizedPixels.map(x => x));
+        frames.push(currentSample);
         prevSample = currentSample;
 
         // Report progress
@@ -46,8 +45,8 @@ function generateFrames(normalizedPixels, frameCount, etaValue) {
     }
   
     for (let i = 0; i < 1; i++) {
-        let newSample = new Float32Array(currentSample.length);
-        newSample.set(currentSample);
+        let newSample = new Float32Array(normalizedPixels.length);
+        newSample.set(normalizedPixels);
         frames.push(newSample);
     }
 

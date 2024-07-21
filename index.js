@@ -22,6 +22,7 @@ function setProgress(progress) {
 }
 
 const expansionFactor = 8;
+const scalingFactor = 0.18125;
 const encUrl = "https://cdn.glitch.global/c46096bd-2ff8-49e5-984a-c5a008800622/taesd_encoder.onnx?v=1721555115983";
 const decUrl = "https://cdn.glitch.global/c46096bd-2ff8-49e5-984a-c5a008800622/taesd_decoder.onnx?v=1721555116768";
 ort.env.wasm.numThreads = 4;
@@ -92,19 +93,19 @@ let gifLoading = Promise.all([fetch('https://cdn.jsdelivr.net/npm/gif.js@0.2.0/d
                       const frame = frames[i];
                       const roundH = Math.ceil(canvas.height / expansionFactor);
                       const roundW = Math.ceil(canvas.width / expansionFactor);
-                    console.log(i, frame);
-                      const tensor = new ort.Tensor('float32', frame, [1, 4, roundH, roundW]); // Adjust shape as needed
+                    console.log(frame);
+                      const tensor = new ort.Tensor('float32', frame.map(x => x / scalingFactor), [1, 4, roundH, roundW]); // Adjust shape as needed
                       const feeds = { latent_sample: tensor };
                       const results = await decoderModel.run(feeds);
                       const buffer = results.sample.data;
                       const rgbPixels = new Uint8ClampedArray(Math.floor(buffer.length / 3) * 4);
                       for (let i = 0; i < frame.length; i++) {
-                          rgbPixels[Math.floor(i / 3) * 4 + i % 3] = Math.round((frame[i] + 1) * 127.5);
+                          rgbPixels[Math.floor(i / 3) * 4 + i % 3] = Math.round((buffer[i] + 1) * 127.5);
                       }
                       const displayPixels = new Uint8ClampedArray(pixels.length);
                       for (let h = 0; h < canvas.height; h++) {
                         for(let w = 0; w < canvas.width; w++) {
-                          displayPixels[h * canvas.width + w] = displayPixels[h * (roundW * expansionFactor) + w];
+                          displayPixels[h * canvas.width + w] = rgbPixels[h * (roundW * expansionFactor) + w];
                         }
                       }
                       const frameData = new ImageData(displayPixels, canvas.height, canvas.width);
@@ -126,7 +127,7 @@ let gifLoading = Promise.all([fetch('https://cdn.jsdelivr.net/npm/gif.js@0.2.0/d
               setMessage("Encoding with VAE...");
               encoderModel.run(feeds).then(results => {
                   setProgress(100);
-                  const latentRepresentation = results.latent_sample.data;
+                  const latentRepresentation = results.latent_sample.data.map(x => x * scalingFactor);
 
                   const frameCount = parseInt(gifLength.value);
                   const etaValue = parseFloat(eta.value);
@@ -144,9 +145,15 @@ let gifLoading = Promise.all([fetch('https://cdn.jsdelivr.net/npm/gif.js@0.2.0/d
                           const frames = e.data.frames;
 
                           setMessage("Decoding...");
-                          decodeImages(frames).then(frames => {
-                            console.log(frames);
-
+                          decodeImages(
+                            // frames
+                            Array(2).map(() => {
+                              const narr = new Float32Array(latentRepresentation.length);
+                              narr.set(latentRepresentation);
+                              console.log(narr);
+                              return narr;
+                            })
+                                      ).then(frames => {
                             const gif = new GIF({
                                 workers: 2,
                                 quality: 10,
@@ -183,8 +190,6 @@ let gifLoading = Promise.all([fetch('https://cdn.jsdelivr.net/npm/gif.js@0.2.0/d
                           })
                       }
                   };
-
-                  console.log(latentRepresentation, latentRepresentation.length);
                   // Send data to the worker
                   worker.postMessage({
                       normalizedPixels: latentRepresentation,
