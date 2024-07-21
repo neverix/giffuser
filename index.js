@@ -6,15 +6,26 @@ const generateBtn = document.getElementById('generateBtn');
 const result = document.getElementById('result');
 const progressBarContainer = document.getElementById('progressBarContainer');
 const progressBar = document.getElementById('progressBar');
+const progressMessage = document.getElementById('progressMessage');
 const overlay = document.getElementById('overlay');
 const downloadBtn = document.getElementById('downloadBtn');
 let shouldBeDisabled = true;
 let loaded = false;
 
+function setMessage(text) {
+  progressMessage.textContent = text;
+}
+function setProgress(progress) {
+  const prog = Math.round(progress * 100);
+  progressBar.style.width = `${prog}%`;
+  progressBar.textContent = `${prog}%`;
+}
+
 const expansionFactor = 8;
 const encUrl = "https://cdn.glitch.global/c46096bd-2ff8-49e5-984a-c5a008800622/taesd_encoder.onnx?v=1721555115983";
 const decUrl = "https://cdn.glitch.global/c46096bd-2ff8-49e5-984a-c5a008800622/taesd_decoder.onnx?v=1721555116768";
 ort.env.wasm.numThreads = 4;
+ort.env.wasm.proxy = true;
 async function loadModel(url) {
     const model = await ort.InferenceSession.create(url, {executionProviders: ['wasm'], graphOptimizationLevel:'all'});
     return model
@@ -57,8 +68,7 @@ let gifLoading = Promise.all([fetch('https://cdn.jsdelivr.net/npm/gif.js@0.2.0/d
 
         // Show progress bar and overlay
         progressBarContainer.style.display = 'block';
-        progressBar.style.width = '0%';
-        progressBar.textContent = '';
+        setProgress(0);
         overlay.style.display = 'flex';
 
         const reader = new FileReader();
@@ -77,12 +87,27 @@ let gifLoading = Promise.all([fetch('https://cdn.jsdelivr.net/npm/gif.js@0.2.0/d
   
               async function decodeImages(frames) {
                   decoded = []
-                  for(let frame of frames) {
-                      const tensor = new ort.Tensor('float32', frame, [1, 4, Math.ceil(canvas.height / expansionFactor), Math.ceil(canvas.width / expansionFactor)]); // Adjust shape as needed
-                      const feeds = { sample: tensor };
+                  setProgress(0);
+                  for(let i = 0; i < frames.length; i++) {
+                      const frame = frames[i];
+                      const roundH = Math.ceil(canvas.height / expansionFactor);
+                      const roundW = Math.ceil(canvas.width / expansionFactor);
+                      const tensor = new ort.Tensor('float32', frame, [1, 4, roundH, roundW]); // Adjust shape as needed
+                      const feeds = { latent_sample: tensor };
                       const results = await decoderModel.run(feeds);
-                      console.log(results);
-                      decoded.push(results.sample.data);
+                      const buffer = results.sample.data;
+                      const rgbPixels = new Uint8ClampedArray(Math.floor(buffer.length / 3) * 4);
+                      for (let i = 0; i < frame.length; i++) {
+                          rgbPixels[Math.floor(i / 3) * 4 + i % 3] = Math.round((frame[i] + 1) * 127.5);
+                      }
+                      const displayPixels = new Uint8ClampedArray(pixels.length);
+                      for (let h = 0; h < canvas.height; h++) {
+                        for(let w = 0; w < canvas.width; w++) {
+                          displayPixels[Math.floor(i / 3) * 4 + i % 3] = Math.round((frame[i] + 1) * 127.5);
+                        }
+                      }
+                      const frameData = new ImageData(displayPixels, roundH * expansionFactor, roundW * expansionFactor);
+                      setProgress((i + 1) / frames.length);
                   }
                   return decoded;
               }
@@ -95,27 +120,27 @@ let gifLoading = Promise.all([fetch('https://cdn.jsdelivr.net/npm/gif.js@0.2.0/d
   
               const tensor = new ort.Tensor('float32', normalizedPixels, [1, 3, canvas.height, canvas.width]); // Adjust shape as needed
               const feeds = { sample: tensor };
-              progressBar.textContent = "Encoding image...";
+              setMessage("Encoding with VAE...");
               encoderModel.run(feeds).then(results => {
+                  setProgress(100);
                   const latentRepresentation = results.latent_sample.data;
-
 
                   const frameCount = parseInt(gifLength.value);
                   const etaValue = parseFloat(eta.value);
-                  progressBar.style.width = '0%';
-                  progressBar.textContent = '0%';
+
+                  setMessage("Running diffusion...");
+                  setProgress(0);
 
                   // Create a new Web Worker
                   const worker = new Worker('worker.js');
 
                   worker.onmessage = function(e) {
                       if (e.data.type === 'progress') {
-                          const progress = Math.round(e.data.progress * 100);
-                          progressBar.style.width = `${progress}%`;
-                          progressBar.textContent = `${progress}%`;
+                          setProgress(e.data.progress);
                       } else if (e.data.type === 'result') {
                           const frames = e.data.frames;
-                        
+
+                          setMessage("Decoding...");
                           decodeImages(frames).then(frames => {
 
                             const gif = new GIF({
@@ -126,14 +151,8 @@ let gifLoading = Promise.all([fetch('https://cdn.jsdelivr.net/npm/gif.js@0.2.0/d
                                 workerScript: URL.createObjectURL(workerBlob),
                             });
 
-                            frames.forEach(frame => {
+                            frames.forEach(frameData => {
                                 // Convert back to [0, 255] range for display
-                                const displayPixels = new Uint8ClampedArray(frame.length);
-                                for (let i = 0; i < frame.length; i++) {
-                                    displayPixels[i] = Math.round((frame[i] + 1) * 127.5);
-                                }
-                                const frameData = new ImageData(displayPixels, canvas.width, canvas.height);
-
                                 const frameCanvas = document.createElement('canvas');
                                 frameCanvas.width = canvas.width;
                                 frameCanvas.height = canvas.height;
