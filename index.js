@@ -14,6 +14,7 @@ const imageContainer = document.getElementById('imageContainer');
 let shouldBeDisabled = true;
 let loaded = false;
 let worker = null;
+let isCancelled = true;
 
 // Add cancel button
 const cancelBtn = document.createElement('button');
@@ -59,10 +60,18 @@ async function loadModel(url) {
     const model = await ort.InferenceSession.create(url, {executionProviders: ['wasm'], graphOptimizationLevel:'all'});
     return model
 }
-async function loadModels(){
-  const model1 = await loadModel(encUrl);
-  const model2 = await loadModel(decUrl);
-  return [model1, model2];
+let cache = null;
+async function loadModels() {
+    const useVAE = useVAECheckbox.checked;
+    if (useVAE) {
+        if(!!cache) return cache;
+        const model1 = await loadModel(encUrl);
+        const model2 = await loadModel(decUrl);
+        cache = [model1, model2];
+        return [model1, model2];
+    } else {
+        return [null, null];
+    }
 }
 imageUpload.addEventListener('change', () => {
     if (imageUpload.files.length > 0) {
@@ -102,7 +111,6 @@ let gifLoading = Promise.all([fetch('https://cdn.jsdelivr.net/npm/gif.js@0.2.0/d
         const frameCount = parseInt(gifLength.value);
         const etaValue = parseFloat(eta.value);
         const useVAE = useVAECheckbox.checked;
-      console.log(useVAE);
 
         const reader = new FileReader();
         reader.onload = function(e) {
@@ -120,8 +128,8 @@ let gifLoading = Promise.all([fetch('https://cdn.jsdelivr.net/npm/gif.js@0.2.0/d
               async function decodeImages(frames) {
                   decoded = []
                   setProgress(0);
-                console.log(useVAE);
                   for(let i = 0; i < frames.length; i++) {
+                      if(isCancelled) break;
                       const frame = frames[i];
                       let frameData;
                       if (useVAE) {
@@ -163,7 +171,10 @@ let gifLoading = Promise.all([fetch('https://cdn.jsdelivr.net/npm/gif.js@0.2.0/d
                       intermediateCanvas.width = canvas.width;
                       intermediateCanvas.height = canvas.height;
                       intermediateCanvas.getContext('2d').putImageData(frameData, 0, 0);
-                      imageContainer.innerHTML = '';
+
+                      // Remove only canvas elements
+                      Array.from(imageContainer.getElementsByTagName('canvas')).forEach(canvas => canvas.remove());
+
                       imageContainer.appendChild(intermediateCanvas);
                   }
                   return decoded;
@@ -174,7 +185,7 @@ let gifLoading = Promise.all([fetch('https://cdn.jsdelivr.net/npm/gif.js@0.2.0/d
               const normalizedPixels = new Float32Array(segmentSize * 3);
               for (let i = 0; i < pixels.length; i++) {
                   if(i % 4 == 3) continue;
-                  normalizedPixels[(i % 4) * segmentSize + Math.floor(i / 4)] = pixels[i] / 255. * 2 - 1;
+                  normalizedPixels[(i % 4) * segmentSize + Math.floor(i / 4)] = pixels[i] / 255.;
               }
   
               if (useVAE) {
@@ -187,7 +198,7 @@ let gifLoading = Promise.all([fetch('https://cdn.jsdelivr.net/npm/gif.js@0.2.0/d
                       runDiffusion(latentRepresentation);
                   });
               } else {
-                  runDiffusion(normalizedPixels);
+                  runDiffusion(normalizedPixels.map(x => x * 2 - 1));
               }
 
               function runDiffusion(inputPixels) {
@@ -204,7 +215,9 @@ let gifLoading = Promise.all([fetch('https://cdn.jsdelivr.net/npm/gif.js@0.2.0/d
                           const frames = e.data.frames;
 
                           setMessage("Decoding...");
+                          isCancelled = false;
                           decodeImages(frames).then(frames => {
+                            if(isCancelled) return;
                             const gif = new GIF({
                                 workers: 2,
                                 quality: 10,
@@ -269,5 +282,6 @@ let gifLoading = Promise.all([fetch('https://cdn.jsdelivr.net/npm/gif.js@0.2.0/d
       result.innerHTML = '';
       downloadBtn.style.display = 'none';
       imageContainer.innerHTML = '';
+      isCancelled = true;
   });
 });
