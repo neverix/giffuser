@@ -1,72 +1,101 @@
 <!DOCTYPE html>
 <html lang="en">
-  <head>
-    <!-- 
-      This is an HTML comment
-      You can write text in a comment and the content won't be visible in the page
-    -->
-
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <link rel="icon" href="https://glitch.com/favicon.ico" />
-
-    <!--
-      This is the page head - it contains info the browser uses
-      Like the title, which appears on the browser tab but not inside the page
-      Further down you'll see the content that displays in the page
-    -->
-    <title>Hello World!</title>
-
-    <!-- The website stylesheet -->
-    <link rel="stylesheet" href="/style.css" />
-
-    <!-- The website JavaScript file -->
-    <script src="/script.js" defer></script>
-  </head>
-  <body>
-    <!--
-      The body includes the content you see in the page
-      Each element is defined using tags, like this <div></div>
-      The attributes like class="wrapper" let us style elements in the CSS
-    -->
-    <div class="wrapper">
-      <div class="content" role="main">
-        <h1 class="title">Hello World!</h1>
-        <img
-          src="https://cdn.glitch.com/a9975ea6-8949-4bab-addb-8a95021dc2da%2Fillustration.svg?v=1618177344016"
-          class="illustration"
-          alt="Editor illustration"
-          title="Click the image!"
-        />
-        <div class="instructions">
-          <h2>Using this project</h2>
-          <p>
-            This is the Glitch <strong>Hello Website</strong> project. You can
-            use it to build your own site. Check out the code in the editor and open
-            the <span class="fileopener" data-file="TODO.md" data-line="0"
-              >TODO</span> for next steps!
-          </p>
-          <!--  🚧 TODO: ADD BUTTON HERE -->
-
-          <!-- Once you've added the button from TODO.md, click it in the page -->
-          <!-- Check out the function in script.js to see how it works -->
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Image Repeater and GIF Creator</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/gif.js/0.2.0/gif.js"></script>
+</head>
+<body>
+    <div class="container mt-5">
+        <h1 class="mb-4">Giffuser</h1>
+        <div class="mb-3">
+            <label for="imageUpload" class="form-label">Upload Image</label>
+            <input type="file" class="form-control" id="imageUpload" accept="image/*">
         </div>
-      </div>
+        <div class="mb-3">
+            <label for="nFrames" class="form-label">GIF length</label>
+            <input type="number" class="form-control" id="nFrames" min="1" value="30">
+        </div>
+        <button id="generateBtn" class="btn btn-primary" disabled>Generate GIF</button>
+        <div id="result" class="mt-4"></div>
     </div>
-    <!-- The footer holds our remix button — you can keep or delete it ✂ -->
-    <footer class="footer">
-      <div class="links"></div>
-      <a
-        class="btn--remix"
-        target="_top"
-        href="https://glitch.com/edit/#!/remix/glitch-hello-website"
-      >
-        <img
-          src="https://cdn.glitch.com/605e2a51-d45f-4d87-a285-9410ad350515%2FLogo_Color.svg?v=1618199565140"
-          alt=""
-        />
-        Remix on Glitch
-      </a>
-    </footer>
-  </body>
+
+    <script>
+        const imageUpload = document.getElementById('imageUpload');
+        const nFrames = document.getElementById('nFrames');
+        const generateBtn = document.getElementById('generateBtn');
+        const result = document.getElementById('result');
+        let gifLoading = fetch('https://cdn.jsdelivr.net/npm/gif.js@0.2.0/dist/gif.worker.js')
+          .then((response) => {
+            if (!response.ok)
+              throw new Error("Network response was not OK");
+            return response.blob();
+          }).then((workerBlob) => {
+          function generateGIF() {
+              const file = imageUpload.files[0];
+              if (!file) {
+                  alert('Please upload an image first.');
+                  return;
+              }
+
+              const reader = new FileReader();
+              const frameCount = nFrames.value;
+              reader.onload = function(e) {
+                  const img = new Image();
+                  img.onload = function() {
+                      const canvas = document.createElement('canvas');
+                      canvas.width = img.width;
+                      canvas.height = img.height;
+                      const ctx = canvas.getContext('2d');
+                      ctx.drawImage(img, 0, 0);
+
+                      const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+                      const pixels = imageData.data;
+
+                      const gif = new GIF({
+                          workers: 2,
+                          quality: 10,
+                          width: canvas.width,
+                          height: canvas.height,
+                          workerScript: URL.createObjectURL(workerBlob),
+                      });
+
+                      for (let i = 0; i < frameCount; i++) {
+                          const noiseCanvas = document.createElement('canvas');
+                          noiseCanvas.width = canvas.width;
+                          noiseCanvas.height = canvas.height;
+                          const noiseCtx = noiseCanvas.getContext('2d');
+                          const noiseData = noiseCtx.createImageData(canvas.width, canvas.height);
+
+                          for (let j = 0; j < noiseData.data.length; j += 4) {
+                              const t = i / (frameCount - 1);
+                              noiseData.data[j] = Math.floor(Math.random() * 255 * (1 - t) + pixels[j] * t);
+                              noiseData.data[j+1] = Math.floor(Math.random() * 255 * (1 - t) + pixels[j+1] * t);
+                              noiseData.data[j+2] = Math.floor(Math.random() * 255 * (1 - t) + pixels[j+2] * t);
+                              noiseData.data[j+3] = 255;
+                          }
+
+                          noiseCtx.putImageData(noiseData, 0, 0);
+                          gif.addFrame(noiseCanvas, {delay: 50});
+                      }
+
+                      gif.on('finished', function(blob) {
+                          const gifUrl = URL.createObjectURL(blob);
+                          result.innerHTML = `<img src="${gifUrl}" alt="Generated GIF">`;
+                      });
+
+                      gif.render();
+                  };
+                  img.src = e.target.result;
+              };
+              reader.readAsDataURL(file);
+          }
+
+          generateBtn.addEventListener('click', generateGIF);
+          generateBtn.disabled = false;
+        });
+    </script>
+</body>
 </html>
