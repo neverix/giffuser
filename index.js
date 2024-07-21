@@ -111,7 +111,7 @@ let gifLoading = Promise.all([fetch('https://cdn.jsdelivr.net/npm/gif.js@0.2.0/d
                           }
                         }
                       }
-                      const frameData = new ImageData(displayPixels, canvas.height, canvas.width);
+                      const frameData = new ImageData(displayPixels, canvas.width, canvas.height);
                       decoded.push(frameData);
                       setProgress((i + 1) / frames.length);
                   }
@@ -123,7 +123,7 @@ let gifLoading = Promise.all([fetch('https://cdn.jsdelivr.net/npm/gif.js@0.2.0/d
               const normalizedPixels = new Float32Array(segmentSize * 3);
               for (let i = 0; i < pixels.length; i++) {
                   if(i % 4 == 3) continue;
-                  normalizedPixels[(i % 4) * segmentSize + Math.floor(i / 4)] = pixels[i] / 127.5 - 1;
+                  normalizedPixels[(i % 4) * segmentSize + Math.floor(i / 4)] = (pixels[i] / 255 - latentShift) * (2 * latentMagnitude);
               }
   
               const tensor = new ort.Tensor('float32', normalizedPixels, [1, 3, canvas.height, canvas.width]); // Adjust shape as needed
