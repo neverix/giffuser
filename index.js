@@ -112,10 +112,12 @@ let gifLoading = Promise.all([fetch('https://cdn.jsdelivr.net/npm/gif.js@0.2.0/d
         const etaValue = parseFloat(eta.value);
         const useVAE = useVAECheckbox.checked;
 
+      
         const reader = new FileReader();
         reader.onload = function(e) {
           const img = new Image();
           img.onload = function() {
+  
               const canvas = document.createElement('canvas');
               canvas.width = img.width;
               canvas.height = img.height;
@@ -124,20 +126,23 @@ let gifLoading = Promise.all([fetch('https://cdn.jsdelivr.net/npm/gif.js@0.2.0/d
 
               const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
               const pixels = imageData.data;
+            
   
               async function decodeImages(frames) {
                   decoded = []
                   setProgress(0);
                   for(let i = 0; i < frames.length; i++) {
-                      if(isCancelled) break;
+                      if(isCancelled) return [];
                       const frame = frames[i];
                       let frameData;
                       if (useVAE) {
                           const roundH = Math.ceil(canvas.height / expansionFactor);
                           const roundW = Math.ceil(canvas.width / expansionFactor);
+                          if(isCancelled) return [];
                           const tensor = new ort.Tensor('float32', frame.map(x => ((x + 1) / 2 - latentShift) * (2 * latentMagnitude)), [1, 4, roundH, roundW]);
                           const feeds = { latent_sample: tensor };
                           const results = await decoderModel.run(feeds);
+                          if(isCancelled) return [];
                           const buffer = results.sample.data;
                           const segmentSize = Math.floor(buffer.length / 3);
                           const rgbaPixels = new Uint8ClampedArray(segmentSize * 4).fill(255);
@@ -154,8 +159,9 @@ let gifLoading = Promise.all([fetch('https://cdn.jsdelivr.net/npm/gif.js@0.2.0/d
                           }
                           frameData = new ImageData(displayPixels, canvas.width, canvas.height);
                       } else {
-                          const rgbaPixels = new Uint8ClampedArray(frame.length * 4);
-                          for (let i = 0; i < frame.length; i++) {
+                          const segmentSize = Math.floor(frame.length / 3);
+                          const rgbaPixels = new Uint8ClampedArray(segmentSize * 4);
+                          for (let i = 0; i < segmentSize; i++) {
                               rgbaPixels[i * 4] = Math.round((frame[i] + 1) * 127.5);
                               rgbaPixels[i * 4 + 1] = Math.round((frame[i + frame.length] + 1) * 127.5);
                               rgbaPixels[i * 4 + 2] = Math.round((frame[i + 2 * frame.length] + 1) * 127.5);
@@ -188,6 +194,7 @@ let gifLoading = Promise.all([fetch('https://cdn.jsdelivr.net/npm/gif.js@0.2.0/d
                   normalizedPixels[(i % 4) * segmentSize + Math.floor(i / 4)] = pixels[i] / 255.;
               }
   
+              isCancelled = false;
               if (useVAE) {
                   const tensor = new ort.Tensor('float32', normalizedPixels, [1, 3, canvas.height, canvas.width]);
                   const feeds = { sample: tensor };
@@ -200,6 +207,8 @@ let gifLoading = Promise.all([fetch('https://cdn.jsdelivr.net/npm/gif.js@0.2.0/d
               } else {
                   runDiffusion(normalizedPixels.map(x => x * 2 - 1));
               }
+            
+              if(isCancelled) return;
 
               function runDiffusion(inputPixels) {
                   setMessage("Running diffusion...");
@@ -215,7 +224,7 @@ let gifLoading = Promise.all([fetch('https://cdn.jsdelivr.net/npm/gif.js@0.2.0/d
                           const frames = e.data.frames;
 
                           setMessage("Decoding...");
-                          isCancelled = false;
+                          if(isCancelled) return;
                           decodeImages(frames).then(frames => {
                             if(isCancelled) return;
                             const gif = new GIF({
