@@ -3,28 +3,33 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Image Repeater and GIF Creator</title>
+    <title>Giffuser</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/gif.js/0.2.0/gif.js"></script>
 </head>
 <body>
     <div class="container mt-5">
-        <h1 class="mb-4">Giffuser</h1>
+        <h1 id="giffuser" class="mb-4">Giffuser</h1>
         <div class="mb-3">
             <label for="imageUpload" class="form-label">Upload Image</label>
             <input type="file" class="form-control" id="imageUpload" accept="image/*">
         </div>
         <div class="mb-3">
-            <label for="nFrames" class="form-label">GIF length</label>
-            <input type="number" class="form-control" id="nFrames" min="1" value="30">
+            <label for="gifLength" class="form-label">GIF length</label>
+            <input type="number" class="form-control" id="gifLength" min="1" value="30">
         </div>
-        <button id="generateBtn" class="btn btn-primary" disabled>Generate GIF</button>
+        <div class="mb-3">
+            <label for="eta" class="form-label">Eta (noise reuse factor)</label>
+            <input type="number" class="form-control" id="eta" min="0" max="1" step="0.1" value="0.5">
+        </div>
+        <button id="generateBtn" class="btn btn-primary">Generate GIF</button>
         <div id="result" class="mt-4"></div>
     </div>
 
     <script>
         const imageUpload = document.getElementById('imageUpload');
-        const nFrames = document.getElementById('nFrames');
+        const gifLength = document.getElementById('gifLength');
+        const eta = document.getElementById('eta');
         const generateBtn = document.getElementById('generateBtn');
         const result = document.getElementById('result');
         let gifLoading = fetch('https://cdn.jsdelivr.net/npm/gif.js@0.2.0/dist/gif.worker.js')
@@ -33,6 +38,7 @@
               throw new Error("Network response was not OK");
             return response.blob();
           }).then((workerBlob) => {
+
           function generateGIF() {
               const file = imageUpload.files[0];
               if (!file) {
@@ -41,7 +47,6 @@
               }
 
               const reader = new FileReader();
-              const frameCount = nFrames.value;
               reader.onload = function(e) {
                   const img = new Image();
                   img.onload = function() {
@@ -54,31 +59,54 @@
                       const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
                       const pixels = imageData.data;
 
+                      // Convert image to [-1, 1] range
+                      const normalizedPixels = new Float32Array(pixels.length);
+                      for (let i = 0; i < pixels.length; i++) {
+                          normalizedPixels[i] = pixels[i] / 127.5 - 1;
+                      }
+
                       const gif = new GIF({
                           workers: 2,
                           quality: 10,
                           width: canvas.width,
-                          height: canvas.height,
-                          workerScript: URL.createObjectURL(workerBlob),
+                          height: canvas.height
                       });
 
-                      for (let i = 0; i < frameCount; i++) {
-                          const noiseCanvas = document.createElement('canvas');
-                          noiseCanvas.width = canvas.width;
-                          noiseCanvas.height = canvas.height;
-                          const noiseCtx = noiseCanvas.getContext('2d');
-                          const noiseData = noiseCtx.createImageData(canvas.width, canvas.height);
+                      const frameCount = parseInt(gifLength.value);
+                      const etaValue = parseFloat(eta.value);
 
-                          for (let j = 0; j < noiseData.data.length; j += 4) {
-                              const t = i / (frameCount - 1);
-                              noiseData.data[j] = Math.floor(Math.random() * 255 * (1 - t) + pixels[j] * t);
-                              noiseData.data[j+1] = Math.floor(Math.random() * 255 * (1 - t) + pixels[j+1] * t);
-                              noiseData.data[j+2] = Math.floor(Math.random() * 255 * (1 - t) + pixels[j+2] * t);
-                              noiseData.data[j+3] = 255;
+                      let prevSample = generateNoise(normalizedPixels.length);
+                      for (let t = frameCount - 1; t >= 0; t--) {
+                          const alphaProdT = t / (frameCount - 1);
+                          const alphaProdTPrev = (t - 1) / (frameCount - 1);
+                          const betaProdT = 1 - alphaProdT;
+                          const variance = getVariance(t, t - 1, frameCount);
+                          const stdDevT = etaValue * Math.sqrt(variance);
+
+                          const predOriginalSample = normalizedPixels;
+                          const predEpsilon = (prevSample - Math.sqrt(alphaProdT) * predOriginalSample) / Math.sqrt(betaProdT);
+
+                          const predSampleDirection = Math.sqrt(1 - alphaProdTPrev - stdDevT ** 2) * predEpsilon;
+                          let currentSample = Math.sqrt(alphaProdTPrev) * predOriginalSample + predSampleDirection;
+
+                          if (etaValue > 0) {
+                              const varianceNoise = generateNoise(normalizedPixels.length);
+                              const variance = stdDevT * varianceNoise;
+                              currentSample = currentSample.map((value, index) => value + variance[index]);
                           }
 
-                          noiseCtx.putImageData(noiseData, 0, 0);
-                          gif.addFrame(noiseCanvas, {delay: 50});
+                          // Convert back to [0, 255] range for display
+                          const displayPixels = new Uint8ClampedArray(currentSample.map(x => (x + 1) * 127.5));
+                          const frameData = new ImageData(displayPixels, canvas.width, canvas.height);
+
+                          const frameCanvas = document.createElement('canvas');
+                          frameCanvas.width = canvas.width;
+                          frameCanvas.height = canvas.height;
+                          frameCanvas.getContext('2d').putImageData(frameData, 0, 0);
+
+                          gif.addFrame(frameCanvas, {delay: 100});
+
+                          prevSample = currentSample;
                       }
 
                       gif.on('finished', function(blob) {
@@ -94,8 +122,17 @@
           }
 
           generateBtn.addEventListener('click', generateGIF);
-          generateBtn.disabled = false;
         });
+
+        function generateNoise(size) {
+            return new Float32Array(size).map(() => (Math.random() * 2) - 1);
+        }
+
+        function getVariance(timestep, prevTimestep, totalSteps) {
+            const alphaT = 1 - (timestep / (totalSteps - 1));
+            const alphaTMinus1 = 1 - (prevTimestep / (totalSteps - 1));
+            return ((1 - alphaTMinus1) / (1 - alphaT)) * (1 - alphaT / alphaTMinus1);
+        }
     </script>
 </body>
 </html>
