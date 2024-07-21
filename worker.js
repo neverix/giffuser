@@ -8,10 +8,11 @@ self.onmessage = function(e) {
 function generateFrames(normalizedPixels, frameCount, etaValue) {
     const frames = [];
     let prevSample = generateNoise(normalizedPixels.length);
+    let currentSample = prevSample;
 
     for (let t = frameCount - 1; t > 0; t--) {
-        const alphaProdT = t / (frameCount - 1);
-        const alphaProdTPrev = (t - 1) / (frameCount - 1);
+        const alphaProdT = 1 - t / (frameCount - 1);
+        const alphaProdTPrev = 1 - (t - 1) / (frameCount - 1);
         const betaProdT = 1 - alphaProdT;
         const variance = getVariance(t, t - 1, frameCount);
         const stdDevT = etaValue * Math.sqrt(variance);
@@ -25,7 +26,7 @@ function generateFrames(normalizedPixels, frameCount, etaValue) {
             Math.sqrt(1 - alphaProdTPrev - stdDevT ** 2) * value
         );
 
-        let currentSample = predOriginalSample.map((value, index) => 
+        currentSample = predOriginalSample.map((value, index) => 
             Math.sqrt(alphaProdTPrev) * value + predSampleDirection[index]
         );
 
@@ -35,13 +36,16 @@ function generateFrames(normalizedPixels, frameCount, etaValue) {
                 value + stdDevT * varianceNoise[index]
             );
         }
-
       
-        // frames.push(currentSample);
+        frames.push(currentSample);
         prevSample = currentSample;
 
         // Report progress
-        self.postMessage({ type: 'progress', progress: (frameCount - t) / frameCount });
+        self.postMessage({ type: 'progress', progress: (frameCount - t) / (frameCount - 1)  });
+    }
+  
+    for (let i = 0; i < 10; i++) {
+        frames.push(currentSample);
     }
 
     return frames;
