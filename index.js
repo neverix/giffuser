@@ -97,29 +97,33 @@ let gifLoading = Promise.all([fetch('https://cdn.jsdelivr.net/npm/gif.js@0.2.0/d
                       const feeds = { latent_sample: tensor };
                       const results = await decoderModel.run(feeds);
                       const buffer = results.sample.data;
-                      const rgbPixels = new Uint8ClampedArray(Math.floor(buffer.length / 3) * 4);
+                      const segmentSize = Math.floor(buffer.length / 3);
+                      const rgbaPixels = new Uint8ClampedArray(segmentSize * 4).fill(255);
                       for (let i = 0; i < buffer.length; i++) {
-                          rgbPixels[Math.floor(i / 3) * 4 + i % 3] = Math.round((buffer[i] + 1) * 127.5);
+                          rgbaPixels[(i % 3) * segmentSize + Math.floor(i / 3)] = Math.round((buffer[i] + 1) * 127.5);
                       }
                       // const frameData = new ImageData(rgbPixels, roundH * expansionFactor, roundW * expansionFactor);
                       const displayPixels = new Uint8ClampedArray(pixels.length);
                       for (let h = 0; h < canvas.height; h++) {
                         for(let w = 0; w < canvas.width; w++) {
-                          displayPixels[h * canvas.width + w] = rgbPixels[h * (roundW * expansionFactor) + w];
+                          for(let c = 0; c < 4; c++) {
+                            displayPixels[(h * canvas.width + w) * 4 + c] = rgbaPixels[(h * (roundW * expansionFactor) + w) * 4 + c];
+                          }
                         }
                       }
                       const frameData = new ImageData(displayPixels, canvas.height, canvas.width);
                       decoded.push(frameData);
-                      setProgress((i + 1) / (frames.length + 1));
+                      setProgress((i + 1) / frames.length);
                   }
-                  setProgress(1);
                   return decoded;
               }
 
               // Convert image to [-1, 1] range
-              const normalizedPixels = new Float32Array(Math.floor(pixels.length) / 4 * 3);
+              const segmentSize = Math.floor(pixels.length / 4);
+              const normalizedPixels = new Float32Array(segmentSize * 3);
               for (let i = 0; i < pixels.length; i++) {
-                  normalizedPixels[i] = pixels[Math.floor(i / 3) * 4 + i % 3] / 127.5 - 1;
+                  if(i % 4 == 3) continue;
+                  normalizedPixels[(i % 4) * segmentSize + Math.floor(i / 4)] = pixels[i] / 127.5 - 1;
               }
   
               const tensor = new ort.Tensor('float32', normalizedPixels, [1, 3, canvas.height, canvas.width]); // Adjust shape as needed
