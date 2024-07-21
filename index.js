@@ -28,7 +28,7 @@ generateBtn.parentNode.insertBefore(cancelBtn, generateBtn.nextSibling);
 const useVAECheckbox = document.createElement('input');
 useVAECheckbox.type = 'checkbox';
 useVAECheckbox.id = 'useVAE';
-useVAECheckbox.checked = false;
+useVAECheckbox.value = false;
 const useVAELabel = document.createElement('label');
 useVAELabel.htmlFor = 'useVAE';
 useVAELabel.textContent = 'Use VAE (slower but more interesting output)';
@@ -62,7 +62,7 @@ async function loadModel(url) {
 }
 let cache = null;
 async function loadModels() {
-    const useVAE = useVAECheckbox.checked;
+    const useVAE = useVAECheckbox.value;
     if (useVAE) {
         if(!!cache) return cache;
         const model1 = await loadModel(encUrl);
@@ -93,6 +93,9 @@ let gifLoading = Promise.all([fetch('https://cdn.jsdelivr.net/npm/gif.js@0.2.0/d
     console.log("init")
 
     function generateGIF() {
+        const prevResult = document.getElementById("result");
+        if(!!prevResult) prevResult.remove();
+      
         generateBtn.disabled = true;
         cancelBtn.style.display = 'inline-block';
 
