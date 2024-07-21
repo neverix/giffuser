@@ -28,10 +28,10 @@ generateBtn.parentNode.insertBefore(cancelBtn, generateBtn.nextSibling);
 const useVAECheckbox = document.createElement('input');
 useVAECheckbox.type = 'checkbox';
 useVAECheckbox.id = 'useVAE';
-useVAECheckbox.checked = true;
+useVAECheckbox.checked = false;
 const useVAELabel = document.createElement('label');
 useVAELabel.htmlFor = 'useVAE';
-useVAELabel.textContent = 'Use VAE (slower but higher quality)';
+useVAELabel.textContent = 'Use VAE (slower but more interesting output)';
 useVAELabel.className = 'form-check-label ms-2';
 const useVAEContainer = document.createElement('div');
 useVAEContainer.className = 'form-check mb-3';
@@ -163,8 +163,8 @@ let gifLoading = Promise.all([fetch('https://cdn.jsdelivr.net/npm/gif.js@0.2.0/d
                           const rgbaPixels = new Uint8ClampedArray(segmentSize * 4);
                           for (let i = 0; i < segmentSize; i++) {
                               rgbaPixels[i * 4] = Math.round((frame[i] + 1) * 127.5);
-                              rgbaPixels[i * 4 + 1] = Math.round((frame[i + frame.length] + 1) * 127.5);
-                              rgbaPixels[i * 4 + 2] = Math.round((frame[i + 2 * frame.length] + 1) * 127.5);
+                              rgbaPixels[i * 4 + 1] = Math.round((frame[i + segmentSize] + 1) * 127.5);
+                              rgbaPixels[i * 4 + 2] = Math.round((frame[i + 2 * segmentSize] + 1) * 127.5);
                               rgbaPixels[i * 4 + 3] = 255;
                           }
                           frameData = new ImageData(rgbaPixels, canvas.width, canvas.height);
@@ -183,6 +183,9 @@ let gifLoading = Promise.all([fetch('https://cdn.jsdelivr.net/npm/gif.js@0.2.0/d
 
                       imageContainer.appendChild(intermediateCanvas);
                   }
+
+                  // Remove only canvas elements
+                  Array.from(imageContainer.getElementsByTagName('canvas')).forEach(canvas => canvas.remove());
                   return decoded;
               }
 
